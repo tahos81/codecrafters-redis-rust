@@ -1,7 +1,14 @@
 use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
+    process::exit,
 };
+
+enum Commands {
+    Echo(usize),
+    Ping,
+    Undefined,
+}
 
 #[tokio::main]
 async fn main() {
@@ -32,10 +39,42 @@ async fn handle_stream(mut stream: TcpStream) {
         if bytes_read == 0 {
             break;
         } else {
-            println!("bytes read: {}", bytes_read);
-            println!("{}", std::str::from_utf8(&input).unwrap());
-            stream.write_all(b"+PONG\r\n").unwrap();
+            match handle_input(&input[0..bytes_read]) {
+                Commands::Ping => {
+                    stream.write_all(b"+PONG\r\n").unwrap();
+                }
+                Commands::Echo(idx) => {
+                    let input_string = std::str::from_utf8(&input[0..bytes_read]).unwrap();
+                    let input_lines = input_string.lines().collect::<Vec<&str>>();
+                    let echo_word = input_lines[idx + 2];
+                    stream
+                        .write_all(format!("+{}{}", echo_word, "\r\n").as_bytes())
+                        .unwrap();
+                }
+                Commands::Undefined => {
+                    eprintln!("something is wrong");
+                    exit(1);
+                }
+            }
+
             input = [0u8; 512];
         }
     }
 }
+
+fn handle_input(input: &[u8]) -> Commands {
+    let input_string = std::str::from_utf8(input).unwrap();
+    for (idx, line) in input_string.lines().enumerate() {
+        match line {
+            "ECHO" => return Commands::Echo(idx),
+            "ping" => return Commands::Ping,
+            _ => {}
+        }
+    }
+
+    Commands::Undefined
+}
+
+// fn to_simple_string(word: &str) -> &[u8] {
+
+// }
