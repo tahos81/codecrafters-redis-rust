@@ -3,7 +3,8 @@ use std::{
     net::{TcpListener, TcpStream},
 };
 
-fn main() {
+#[tokio::main]
+async fn main() {
     println!("Logs from your program will appear here!");
 
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
@@ -11,7 +12,7 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(mut _stream) => {
-                handle_stream(_stream);
+                tokio::spawn(handle_stream(_stream));
             }
             Err(e) => {
                 println!("error: {}", e);
@@ -20,7 +21,7 @@ fn main() {
     }
 }
 
-fn handle_stream(mut stream: TcpStream) {
+async fn handle_stream(mut stream: TcpStream) {
     println!("accepted new connection");
 
     let mut input = [0u8; 512];
