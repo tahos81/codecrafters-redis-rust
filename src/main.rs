@@ -48,7 +48,9 @@ async fn handle_stream(mut stream: TcpStream) {
                     let input_lines = input_string.lines().collect::<Vec<&str>>();
                     let echo_word = input_lines[idx + 2];
                     stream
-                        .write_all(format!("+{}{}", echo_word, "\r\n").as_bytes())
+                        .write_all(
+                            format!("${}\r\n{}{}", echo_word.len(), echo_word, "\r\n").as_bytes(),
+                        )
                         .unwrap();
                 }
                 Commands::Undefined => {
@@ -74,7 +76,3 @@ fn handle_input(input: &[u8]) -> Commands {
 
     Commands::Undefined
 }
-
-// fn to_simple_string(word: &str) -> &[u8] {
-
-// }
