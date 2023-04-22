@@ -68,7 +68,7 @@ fn handle_input(input: &[u8]) -> Commands {
     let input_string = std::str::from_utf8(input).unwrap();
     for (idx, line) in input_string.lines().enumerate() {
         match line {
-            "ECHO" => return Commands::Echo(idx),
+            "echo" => return Commands::Echo(idx),
             "ping" => return Commands::Ping,
             _ => {}
         }
