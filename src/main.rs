@@ -118,15 +118,19 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                     let input_lines = input.lines().collect::<Vec<&str>>();
                     let key = input_lines[4];
                     let inner_map = storage.lock().unwrap();
-                    let value = inner_map.get(key).unwrap();
-                    if value == "" {
-                        stream.write_all(b"$-1\r\n").unwrap();
-                    } else {
-                        stream
-                            .write_all(
-                                format!("${}\r\n{}{}", value.len(), value, "\r\n").as_bytes(),
-                            )
-                            .unwrap();
+                    let value = inner_map.get(key);
+                    dbg!(value);
+                    match value {
+                        Some(val) => {
+                            stream
+                                .write_all(
+                                    format!("${}\r\n{}{}", val.len(), val, "\r\n").as_bytes(),
+                                )
+                                .unwrap();
+                        }
+                        None => {
+                            stream.write_all(b"$-1\r\n").unwrap();
+                        }
                     }
                 }
                 Commands::Undefined => {
@@ -156,7 +160,7 @@ fn handle_input(input: &str) -> Commands {
 
 async fn expire(expiry: String, key: String, storage: SafeMap) {
     let duration = expiry.parse::<u64>().unwrap();
-    sleep(Duration::from_millis(duration - 20));
+    sleep(Duration::from_millis(duration));
     let mut inner_map = storage.lock().unwrap();
-    inner_map.insert(key.to_string(), "".to_string());
+    inner_map.remove(&key);
 }
