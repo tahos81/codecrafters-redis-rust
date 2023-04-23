@@ -86,7 +86,7 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                                     }
                                     None => stream.write_all(b"+OK\r\n").unwrap(),
                                 }
-                                drop(inner_map);
+                                //drop(inner_map);
                                 tokio::spawn(expire(
                                     expiry.to_string(),
                                     key.to_string(),
@@ -155,7 +155,8 @@ fn handle_input(input: &str) -> Commands {
 }
 
 async fn expire(expiry: String, key: String, storage: SafeMap) {
-    sleep(Duration::from_millis(expiry.parse::<u64>().unwrap()));
+    let duration = expiry.parse::<u64>().unwrap();
+    sleep(Duration::from_millis(duration - 20));
     let mut inner_map = storage.lock().unwrap();
     inner_map.insert(key.to_string(), "".to_string());
 }
