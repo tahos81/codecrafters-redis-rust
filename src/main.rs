@@ -86,7 +86,7 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                                     }
                                     None => stream.write_all(b"+OK\r\n").unwrap(),
                                 }
-                                //drop(inner_map);
+                                drop(inner_map);
                                 tokio::spawn(expire(
                                     expiry.to_string(),
                                     key.to_string(),
