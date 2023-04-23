@@ -167,7 +167,9 @@ fn handle_input(input: &str) -> Commands {
 
 async fn expire(expiry: String, key: String, storage: SafeMap) {
     let duration = expiry.parse::<u64>().unwrap();
+    dbg!("start removing");
     sleep(Duration::from_millis(duration));
     let mut inner_map = storage.lock().await;
     inner_map.remove(&key);
+    dbg!("removed");
 }
