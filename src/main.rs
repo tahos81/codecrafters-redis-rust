@@ -34,7 +34,7 @@ async fn main() {
                 tokio::spawn(handle_stream(_stream, storage.clone()));
             }
             Err(e) => {
-                println!("error: {}", e); //
+                println!("error: {}", e);
             }
         }
     }
