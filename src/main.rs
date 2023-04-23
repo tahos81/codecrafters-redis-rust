@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use futures::lock::Mutex;
+use tokio::sync::Mutex;
 
 enum Commands {
     Echo,
