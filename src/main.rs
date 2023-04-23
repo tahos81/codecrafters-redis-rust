@@ -4,12 +4,14 @@ use std::{
     net::{TcpListener, TcpStream},
     process::exit,
     sync::{Arc, Mutex},
+    thread::sleep,
+    time::Duration,
 };
 
 enum Commands {
-    Echo(usize),
+    Echo,
     Ping,
-    Set(usize),
+    Set,
     Get,
     Undefined,
 }
@@ -52,30 +54,60 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                 Commands::Ping => {
                     stream.write_all(b"+PONG\r\n").unwrap();
                 }
-                Commands::Echo(idx) => {
+                Commands::Echo => {
                     let input_lines = input.lines().collect::<Vec<&str>>();
-                    let echo_word = input_lines[idx + 2];
+                    let echo_word = input_lines[4];
                     stream
                         .write_all(
                             format!("${}\r\n{}{}", echo_word.len(), echo_word, "\r\n").as_bytes(),
                         )
                         .unwrap();
                 }
-                Commands::Set(idx) => {
+                Commands::Set => {
                     let input_lines = input.lines().collect::<Vec<&str>>();
-                    let key = input_lines[idx + 2];
-                    let value = input_lines[idx + 4];
-                    let mut inner_map = storage.lock().unwrap();
-                    let _old_value = inner_map.insert(key.to_string(), value.to_string());
-                    match _old_value {
-                        Some(value) => {
-                            stream
-                                .write_all(
-                                    format!("${}\r\n{}{}", value.len(), value, "\r\n").as_bytes(),
-                                )
-                                .unwrap();
+                    let key = input_lines[4];
+                    let value = input_lines[6];
+                    let option = input_lines.get(8);
+                    match option {
+                        Some(opt) => {
+                            if opt == &"px" {
+                                let expiry = input_lines[10];
+                                let mut inner_map = storage.lock().unwrap();
+                                let _old_value =
+                                    inner_map.insert(key.to_string(), value.to_string());
+                                match _old_value {
+                                    Some(value) => {
+                                        stream
+                                            .write_all(
+                                                format!("${}\r\n{}{}", value.len(), value, "\r\n")
+                                                    .as_bytes(),
+                                            )
+                                            .unwrap();
+                                    }
+                                    None => stream.write_all(b"+OK\r\n").unwrap(),
+                                }
+                                sleep(Duration::from_millis(expiry.parse::<u64>().unwrap()));
+                                inner_map.insert(key.to_string(), "".to_string());
+                            } else {
+                                eprintln!("something is wrong");
+                                exit(1);
+                            }
                         }
-                        None => stream.write_all(b"+OK\r\n").unwrap(),
+                        None => {
+                            let mut inner_map = storage.lock().unwrap();
+                            let _old_value = inner_map.insert(key.to_string(), value.to_string());
+                            match _old_value {
+                                Some(value) => {
+                                    stream
+                                        .write_all(
+                                            format!("${}\r\n{}{}", value.len(), value, "\r\n")
+                                                .as_bytes(),
+                                        )
+                                        .unwrap();
+                                }
+                                None => stream.write_all(b"+OK\r\n").unwrap(),
+                            }
+                        }
                     }
                 }
                 Commands::Get => {
@@ -83,9 +115,15 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                     let key = input_lines[4];
                     let inner_map = storage.lock().unwrap();
                     let value = inner_map.get(key).unwrap();
-                    stream
-                        .write_all(format!("${}\r\n{}{}", value.len(), value, "\r\n").as_bytes())
-                        .unwrap();
+                    if value == "" {
+                        stream.write_all(b"$-1\r\n").unwrap();
+                    } else {
+                        stream
+                            .write_all(
+                                format!("${}\r\n{}{}", value.len(), value, "\r\n").as_bytes(),
+                            )
+                            .unwrap();
+                    }
                 }
                 Commands::Undefined => {
                     eprintln!("something is wrong");
@@ -99,11 +137,11 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
 }
 
 fn handle_input(input: &str) -> Commands {
-    for (idx, line) in input.lines().enumerate() {
+    for line in input.lines() {
         match line {
-            "echo" => return Commands::Echo(idx),
+            "echo" => return Commands::Echo,
             "ping" => return Commands::Ping,
-            "set" => return Commands::Set(idx),
+            "set" => return Commands::Set,
             "get" => return Commands::Get,
             _ => {}
         }
