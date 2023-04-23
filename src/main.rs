@@ -86,8 +86,12 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                                     }
                                     None => stream.write_all(b"+OK\r\n").unwrap(),
                                 }
-                                sleep(Duration::from_millis(expiry.parse::<u64>().unwrap()));
-                                inner_map.insert(key.to_string(), "".to_string());
+                                //drop(inner_map);
+                                tokio::spawn(expire(
+                                    expiry.to_string(),
+                                    key.to_string(),
+                                    storage.clone(),
+                                ));
                             } else {
                                 eprintln!("something is wrong");
                                 exit(1);
@@ -148,4 +152,10 @@ fn handle_input(input: &str) -> Commands {
     }
 
     Commands::Undefined
+}
+
+async fn expire(expiry: String, key: String, storage: SafeMap) {
+    sleep(Duration::from_millis(expiry.parse::<u64>().unwrap()));
+    let mut inner_map = storage.lock().unwrap();
+    inner_map.insert(key.to_string(), "".to_string());
 }
