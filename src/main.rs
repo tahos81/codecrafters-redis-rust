@@ -87,11 +87,15 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                                     None => stream.write_all(b"+OK\r\n").unwrap(),
                                 }
                                 //drop(inner_map);
-                                tokio::spawn(expire(
-                                    expiry.to_string(),
-                                    key.to_string(),
-                                    storage.clone(),
-                                ));
+                                // tokio::spawn(expire(
+                                //     expiry.to_string(),
+                                //     key.to_string(),
+                                //     storage.clone(),
+                                // ));
+                                let map = storage.clone();
+                                let exp = expiry.to_string();
+                                let owned_key = key.to_string();
+                                std::thread::spawn(move || expire(exp, owned_key, map));
                             } else {
                                 eprintln!("something is wrong");
                                 exit(1);
@@ -119,7 +123,6 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                     let key = input_lines[4];
                     let inner_map = storage.lock().unwrap();
                     let value = inner_map.get(key);
-                    dbg!(value);
                     match value {
                         Some(val) => {
                             stream
@@ -160,7 +163,7 @@ fn handle_input(input: &str) -> Commands {
 
 async fn expire(expiry: String, key: String, storage: SafeMap) {
     let duration = expiry.parse::<u64>().unwrap();
-    sleep(Duration::from_millis(duration - 60));
+    sleep(Duration::from_millis(duration));
     let mut inner_map = storage.lock().unwrap();
     inner_map.remove(&key);
 }
