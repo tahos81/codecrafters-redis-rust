@@ -141,11 +141,9 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                     }
                 }
                 Commands::Undefined => {
-                    eprintln!("something is wrong");
-                    exit(1);
+                    stream.write_all(b"+UNDEFINED COMMAND\r\n").unwrap();
                 }
             }
-
             buf = [0u8; 512];
         }
     }
