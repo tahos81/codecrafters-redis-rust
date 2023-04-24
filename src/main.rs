@@ -65,7 +65,6 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                         .unwrap();
                 }
                 Commands::Set => {
-                    dbg!("setting");
                     let input_lines = input.lines().collect::<Vec<&str>>();
                     let key = input_lines[4];
                     let value = input_lines[6];
@@ -122,7 +121,6 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                     }
                 }
                 Commands::Get => {
-                    dbg!("getting");
                     let input_lines = input.lines().collect::<Vec<&str>>();
                     let key = input_lines[4];
                     let inner_map = storage.lock().unwrap();
@@ -165,9 +163,7 @@ fn handle_input(input: &str) -> Commands {
 
 fn expire(expiry: String, key: String, storage: SafeMap) {
     let duration = expiry.parse::<u64>().unwrap();
-    dbg!("start removing");
     sleep(Duration::from_millis(duration));
     let mut inner_map = storage.lock().unwrap();
     inner_map.remove(&key);
-    dbg!("removed");
 }
