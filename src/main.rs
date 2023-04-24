@@ -99,7 +99,10 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                                 let map = storage.clone();
                                 let exp = expiry.to_string();
                                 let owned_key = key.to_string();
-                                _handle = std::thread::spawn(move || expire(exp, owned_key, map));
+                                let handle = tokio::runtime::Handle::current();
+                                _handle = std::thread::spawn(move || {
+                                    handle.block_on(expire(exp, owned_key, map))
+                                });
                                 //handle.join().unwrap().await;
                             } else {
                                 eprintln!("something is wrong");
@@ -147,7 +150,6 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                 }
             }
             buf = [0u8; 512];
-            dbg!("buf cleaned");
         }
     }
 }
