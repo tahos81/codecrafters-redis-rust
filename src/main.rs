@@ -67,6 +67,7 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                         .unwrap();
                 }
                 Commands::Set => {
+                    dbg!("setting");
                     let input_lines = input.lines().collect::<Vec<&str>>();
                     let key = input_lines[4];
                     let value = input_lines[6];
@@ -123,6 +124,7 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                     }
                 }
                 Commands::Get => {
+                    dbg!("getting");
                     let input_lines = input.lines().collect::<Vec<&str>>();
                     let key = input_lines[4];
                     let inner_map = storage.lock().await;
@@ -145,6 +147,7 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                 }
             }
             buf = [0u8; 512];
+            dbg!("buf cleaned");
         }
     }
 }
