@@ -44,6 +44,7 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
     println!("accepted new connection");
 
     let mut buf = [0u8; 512];
+    let mut _handle;
 
     loop {
         let bytes_read = stream.read(&mut buf).unwrap_or_default();
@@ -97,8 +98,7 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                                 let map = storage.clone();
                                 let exp = expiry.to_string();
                                 let owned_key = key.to_string();
-                                let _handle =
-                                    std::thread::spawn(move || expire(exp, owned_key, map));
+                                _handle = std::thread::spawn(move || expire(exp, owned_key, map));
                                 //handle.join().unwrap().await;
                             } else {
                                 eprintln!("something is wrong");
