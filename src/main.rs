@@ -97,9 +97,9 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                                 let map = storage.clone();
                                 let exp = expiry.to_string();
                                 let owned_key = key.to_string();
-                                let handle =
+                                let _handle =
                                     std::thread::spawn(move || expire(exp, owned_key, map));
-                                handle.join().unwrap().await;
+                                //handle.join().unwrap().await;
                             } else {
                                 eprintln!("something is wrong");
                                 exit(1);
