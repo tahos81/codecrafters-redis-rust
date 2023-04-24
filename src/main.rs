@@ -3,12 +3,10 @@ use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
     process::exit,
-    sync::Arc,
+    sync::{Arc, Mutex},
     thread::sleep,
     time::Duration,
 };
-
-use tokio::sync::Mutex;
 
 enum Commands {
     Echo,
@@ -76,7 +74,7 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                         Some(opt) => {
                             if opt == &"px" {
                                 let expiry = input_lines[10];
-                                let mut inner_map = storage.lock().await;
+                                let mut inner_map = storage.lock().unwrap();
                                 let _old_value =
                                     inner_map.insert(key.to_string(), value.to_string());
                                 match _old_value {
@@ -99,10 +97,7 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                                 let map = storage.clone();
                                 let exp = expiry.to_string();
                                 let owned_key = key.to_string();
-                                let handle = tokio::runtime::Handle::current();
-                                _handle = std::thread::spawn(move || {
-                                    handle.block_on(expire(exp, owned_key, map))
-                                });
+                                _handle = std::thread::spawn(move || expire(exp, owned_key, map));
                                 //handle.join().unwrap().await;
                             } else {
                                 eprintln!("something is wrong");
@@ -110,7 +105,7 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                             }
                         }
                         None => {
-                            let mut inner_map = storage.lock().await;
+                            let mut inner_map = storage.lock().unwrap();
                             let _old_value = inner_map.insert(key.to_string(), value.to_string());
                             match _old_value {
                                 Some(value) => {
@@ -130,7 +125,7 @@ async fn handle_stream(mut stream: TcpStream, storage: SafeMap) {
                     dbg!("getting");
                     let input_lines = input.lines().collect::<Vec<&str>>();
                     let key = input_lines[4];
-                    let inner_map = storage.lock().await;
+                    let inner_map = storage.lock().unwrap();
                     let value = inner_map.get(key);
                     match value {
                         Some(val) => {
@@ -168,11 +163,11 @@ fn handle_input(input: &str) -> Commands {
     Commands::Undefined
 }
 
-async fn expire(expiry: String, key: String, storage: SafeMap) {
+fn expire(expiry: String, key: String, storage: SafeMap) {
     let duration = expiry.parse::<u64>().unwrap();
     dbg!("start removing");
     sleep(Duration::from_millis(duration));
-    let mut inner_map = storage.lock().await;
+    let mut inner_map = storage.lock().unwrap();
     inner_map.remove(&key);
     dbg!("removed");
 }
