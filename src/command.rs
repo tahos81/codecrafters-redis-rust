@@ -113,9 +113,9 @@ impl<'a> TryFrom<Data<'a, &'a str>> for Command<'a> {
 }
 
 pub async fn prep_response<'a>(
-    cmd: Command<'a>,
+    cmd: Command<'_>,
     db: Arc<RwLock<HashMap<String, String>>>,
-) -> Data<'a, &'a str> {
+) -> Data<'_, &'a str> {
     match cmd {
         Command::Ping { message } => {
             let resp = message.unwrap_or("PONG");
@@ -140,9 +140,9 @@ pub async fn prep_response<'a>(
 }
 
 pub async fn prep_get_response<'a>(
-    cmd: Command<'a>,
+    cmd: Command<'_>,
     db: Arc<RwLock<HashMap<String, String>>>,
-) -> Data<'a, String> {
+) -> Data<'_, String> {
     match cmd {
         Command::Get { key } => {
             let db_read = db.read().await;
