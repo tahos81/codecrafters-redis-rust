@@ -2,6 +2,7 @@ use crate::resp::Data;
 use anyhow::{anyhow, Result};
 use std::{collections::HashMap, sync::Arc};
 use tokio::{
+    net::TcpStream,
     sync::RwLock,
     time::{sleep, Duration},
 };
@@ -23,10 +24,10 @@ pub enum Command<'a> {
     },
 }
 
-impl<'a> TryFrom<Data<'a, &'a str>> for Command<'a> {
+impl<'a> TryFrom<Data<'a>> for Command<'a> {
     type Error = anyhow::Error;
 
-    fn try_from(value: Data<'a, &'a str>) -> Result<Self> {
+    fn try_from(value: Data<'a>) -> Result<Self> {
         match value {
             Data::Array(arr) => {
                 //this is equivalent to copy
@@ -112,16 +113,23 @@ impl<'a> TryFrom<Data<'a, &'a str>> for Command<'a> {
     }
 }
 
-pub async fn prep_response<'a>(
+pub async fn run<'a>(
     cmd: Command<'_>,
     db: Arc<RwLock<HashMap<String, String>>>,
-) -> Data<'_, &'a str> {
+    socket: Arc<RwLock<TcpStream>>,
+) -> Result<()> {
     match cmd {
         Command::Ping { message } => {
-            let resp = message.unwrap_or("PONG");
-            Data::SimpleString(resp)
+            let msg = message.unwrap_or("PONG");
+            let output = Data::SimpleString(msg);
+            let mut socket_write = socket.write().await;
+            output.write_to(&mut *socket_write).await
         }
-        Command::Echo { message } => Data::SimpleString(message),
+        Command::Echo { message } => {
+            let output = Data::SimpleString(message);
+            let mut socket_write = socket.write().await;
+            output.write_to(&mut *socket_write).await
+        }
         Command::Set { key, value, ttl } => {
             let key = key.to_string();
             if let Some(ttl) = ttl {
@@ -133,25 +141,24 @@ pub async fn prep_response<'a>(
             }
             let mut db_write = db.write().await;
             db_write.insert(key, value.to_string());
-            Data::SimpleString("OK")
+            let output = Data::SimpleString("OK");
+            let mut socket_write = socket.write().await;
+            output.write_to(&mut *socket_write).await
         }
-        Command::Get { .. } => unreachable!(),
-    }
-}
-
-pub async fn prep_get_response<'a>(
-    cmd: Command<'_>,
-    db: Arc<RwLock<HashMap<String, String>>>,
-) -> Data<'_, String> {
-    match cmd {
         Command::Get { key } => {
             let db_read = db.read().await;
+            let output;
             match db_read.get(key) {
-                Some(val) => Data::BulkString(Some(val.clone())),
-                None => Data::BulkString(None),
+                Some(val) => {
+                    output = Data::BulkString(Some(val.as_str()));
+                }
+                None => {
+                    output = Data::BulkString(None);
+                }
             }
+            let mut socket_write = socket.write().await;
+            output.write_to(&mut *socket_write).await
         }
-        _ => unreachable!(),
     }
 }
 

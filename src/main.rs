@@ -4,6 +4,7 @@
 
 use crate::command::Command;
 use anyhow::Result;
+use resp::Data;
 use std::{collections::HashMap, sync::Arc};
 use tokio::{io::AsyncReadExt, net::TcpListener, sync::RwLock};
 
@@ -24,24 +25,23 @@ async fn main() -> Result<()> {
 }
 
 async fn handle_client(
-    mut socket: tokio::net::TcpStream,
+    socket: tokio::net::TcpStream,
     db: Arc<RwLock<HashMap<String, String>>>,
 ) -> Result<()> {
     let mut buf = [0; 512];
+    let socket = Arc::new(RwLock::new(socket));
+    let mut bytes_read;
     loop {
-        let bytes_read = socket.read(&mut buf).await?;
+        {
+            let mut socket_write = socket.write().await;
+            bytes_read = socket_write.read(&mut buf).await?;
+        }
         if bytes_read == 0 {
             break;
         }
-        let (data, _) = resp::Data::<&str>::decode(&buf)?;
+        let (data, _) = Data::decode(&buf)?;
         let cmd = Command::try_from(data)?;
-        if let Command::Get { .. } = cmd {
-            let resp = command::prep_get_response(cmd, db.clone()).await;
-            resp.write_to(&mut socket).await?;
-        } else {
-            let resp = command::prep_response(cmd, db.clone()).await;
-            resp.write_to(&mut socket).await?;
-        }
+        command::run(cmd, db.clone(), socket.clone()).await?;
     }
     Ok(())
 }

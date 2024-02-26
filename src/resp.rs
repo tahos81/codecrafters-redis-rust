@@ -3,21 +3,15 @@ use std::fmt::{self, Write};
 use anyhow::Result;
 
 #[derive(Debug)]
-pub enum Data<'a, T>
-where
-    T: AsRef<[u8]> + fmt::Display,
-{
+pub enum Data<'a> {
     SimpleString(&'a str),
     SimpleError(&'a str),
     Integer(i64),
-    BulkString(Option<T>),
-    Array(Vec<Data<'a, T>>),
+    BulkString(Option<&'a str>),
+    Array(Vec<Data<'a>>),
 }
 
-impl<'a, T> fmt::Display for Data<'_, T>
-where
-    T: AsRef<[u8]> + 'a + fmt::Display,
-{
+impl<'a> fmt::Display for Data<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Data::SimpleString(s) => write!(f, "+{s}\r\n"),
@@ -25,7 +19,7 @@ where
             Data::Integer(i) => write!(f, ":{i}\r\n"),
             Data::BulkString(s) => match s {
                 Some(s) => {
-                    write!(f, "${}\r\n{}\r\n", s.as_ref().len(), s)
+                    write!(f, "${}\r\n{}\r\n", s.len(), s)
                 }
                 None => write!(f, "$-1\r\n"),
             },
@@ -40,10 +34,7 @@ where
     }
 }
 
-impl<'a, T> Data<'a, T>
-where
-    T: AsRef<[u8]> + 'a + fmt::Display,
-{
+impl<'a> Data<'a> {
     pub async fn write_to<WR: tokio::io::AsyncWriteExt + std::marker::Unpin>(
         &self,
         w: &mut WR,
@@ -73,9 +64,9 @@ where
             Data::BulkString(s) => match s {
                 Some(s) => {
                     w.write_all(b"$").await?;
-                    w.write_all(s.as_ref().len().to_string().as_bytes()).await?;
+                    w.write_all(s.len().to_string().as_bytes()).await?;
                     w.write_all(b"\r\n").await?;
-                    w.write_all(s.as_ref()).await?;
+                    w.write_all(s.as_bytes()).await?;
                     w.write_all(b"\r\n").await?;
                     w.flush().await?;
                     Ok(())
@@ -100,7 +91,7 @@ where
         }
     }
 
-    pub fn decode(data: &'a [u8]) -> Result<(Data<'a, &'a str>, &'a [u8])> {
+    pub fn decode(data: &'a [u8]) -> Result<(Data<'a>, &'a [u8])> {
         let (fb, data) = data.split_first().expect("empty data");
         match fb {
             b'+' => {
@@ -136,7 +127,7 @@ where
 
                 let mut remaining = &data[idx + 2..];
                 for _ in 0..len {
-                    let (d, rem): (Data<'_, &str>, &[u8]) = Data::<&str>::decode(remaining)?;
+                    let (d, rem): (Data<'_>, &[u8]) = Data::decode(remaining)?;
                     arr.push(d);
                     remaining = rem;
                 }
