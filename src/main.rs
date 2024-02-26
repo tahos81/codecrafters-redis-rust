@@ -35,15 +35,12 @@ async fn handle_client(
         }
         let (data, _) = resp::Data::<&str>::decode(&buf)?;
         let cmd = Command::try_from(data)?;
-        match cmd {
-            Command::Get { .. } => {
-                let resp = command::prep_get_response(cmd, db.clone()).await;
-                resp.write_to(&mut socket).await?;
-            }
-            _ => {
-                let resp = command::prep_response(cmd, db.clone()).await;
-                resp.write_to(&mut socket).await?;
-            }
+        if let Command::Get { .. } = cmd {
+            let resp = command::prep_get_response(cmd, db.clone()).await;
+            resp.write_to(&mut socket).await?;
+        } else {
+            let resp = command::prep_response(cmd, db.clone()).await;
+            resp.write_to(&mut socket).await?;
         }
     }
     Ok(())

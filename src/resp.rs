@@ -20,9 +20,9 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Data::SimpleString(s) => write!(f, "+{}\r\n", s),
-            Data::SimpleError(s) => write!(f, "-{}\r\n", s),
-            Data::Integer(i) => write!(f, ":{}\r\n", i),
+            Data::SimpleString(s) => write!(f, "+{s}\r\n"),
+            Data::SimpleError(s) => write!(f, "-{s}\r\n"),
+            Data::Integer(i) => write!(f, ":{i}\r\n"),
             Data::BulkString(s) => match s {
                 Some(s) => {
                     write!(f, "${}\r\n{}\r\n", s.as_ref().len(), s)
@@ -32,7 +32,7 @@ where
             Data::Array(arr) => {
                 write!(f, "*{}\r\n", arr.len())?;
                 for a in arr {
-                    write!(f, "{}", a)?;
+                    write!(f, "{a}")?;
                 }
                 Ok(())
             }
@@ -92,7 +92,7 @@ where
                 w.write_all(b"\r\n").await?;
                 let mut s = String::new();
                 for a in arr {
-                    write!(s, "{}", a)?
+                    write!(s, "{a}")?;
                 }
                 w.write_all(s.as_bytes()).await?;
                 Ok(())
