@@ -1,4 +1,7 @@
-use std::fmt::{self, Write};
+use std::{
+    fmt::{self, Write},
+    str,
+};
 
 use anyhow::{Context, Result};
 
@@ -95,62 +98,44 @@ impl<'a> Data<'a> {
         let (fb, data) = data.split_first().with_context(|| "RESP empty data")?;
         match fb {
             b'+' => {
-                let idx = data
-                    .iter()
-                    .position(|&c| c == b'\r')
-                    .with_context(|| "RESP no crlf")?;
-                let s = std::str::from_utf8(&data[..idx]).with_context(|| "RESP invalid utf8")?;
-                let remaining = &data[idx + 2..];
+                let (data, remaining) = parse_line(data)?;
+                let s = parse_utf8(data)?;
                 Ok((Data::SimpleString(s), remaining))
             }
             b'-' => {
-                let idx = data
-                    .iter()
-                    .position(|&c| c == b'\r')
-                    .with_context(|| "RESP no crlf")?;
-                let s = std::str::from_utf8(&data[..idx]).with_context(|| "RESP invalid utf8")?;
-                let remaining = &data[idx + 2..];
+                let (data, remaining) = parse_line(data)?;
+                let s = parse_utf8(data)?;
                 Ok((Data::SimpleError(s), remaining))
             }
             b':' => {
-                let idx = data
-                    .iter()
-                    .position(|&c| c == b'\r')
-                    .with_context(|| "RESP no crlf")?;
-                let s = std::str::from_utf8(&data[..idx])
-                    .with_context(|| "RESP invalid utf8")?
-                    .parse()
-                    .with_context(|| "RESP invalid integer")?;
-                let remaining = &data[idx + 2..];
-                Ok((Data::Integer(s), remaining))
+                let (data, remaining) = parse_line(data)?;
+                let i = parse_integer(data)?;
+                Ok((Data::Integer(i), remaining))
             }
             b'$' => {
-                let idx = data
-                    .iter()
-                    .position(|&c| c == b'\r')
-                    .with_context(|| "RESP no crlf")?;
-                let len: usize = std::str::from_utf8(&data[..idx])
-                    .with_context(|| "RESP invalid utf8")?
-                    .parse()
-                    .with_context(|| "RESP invalid integer")?;
-                let s = std::str::from_utf8(&data[idx + 2..idx + 2 + len])
-                    .with_context(|| "RESP invalid utf8")?;
-                let remaining = &data[idx + 2 + len + 2..];
-                Ok((Data::BulkString(Some(s)), remaining))
+                let (data, remaining) = parse_line(data)?;
+                let len = parse_integer(data)?;
+                let (s, remaining) = if len == -1 {
+                    (None, remaining)
+                } else {
+                    let (data, remaining) = parse_line(remaining)?;
+                    let s = parse_utf8(data)?;
+                    (Some(s), remaining)
+                };
+                Ok((Data::BulkString(s), remaining))
             }
             b'*' => {
-                let idx = data
-                    .iter()
-                    .position(|&c| c == b'\r')
-                    .with_context(|| "RESP no crlf")?;
-                let len = std::str::from_utf8(&data[..idx])
-                    .with_context(|| "RESP invalid utf8")?
-                    .parse()
-                    .with_context(|| "RESP invalid integer")?;
+                let (data, mut remaining) = parse_line(data)?;
+                let len = parse_integer(data)?;
+
+                if len == -1 {
+                    return Ok((Data::Array(Vec::new()), remaining));
+                }
+
+                let len = len as usize;
 
                 let mut arr = Vec::with_capacity(len);
 
-                let mut remaining = &data[idx + 2..];
                 for _ in 0..len {
                     let (d, rem): (Data<'_>, &[u8]) = Data::decode(remaining)?;
                     arr.push(d);
@@ -162,4 +147,20 @@ impl<'a> Data<'a> {
             _ => Err(anyhow::anyhow!("UNIMPLEMENTED unknown data type")),
         }
     }
+}
+
+fn parse_line(data: &[u8]) -> Result<(&[u8], &[u8])> {
+    let idx = data
+        .windows(2)
+        .position(|window| window == b"\r\n")
+        .with_context(|| "no crlf")?;
+    Ok((&data[..idx], &data[idx + 2..]))
+}
+
+fn parse_utf8(data: &[u8]) -> Result<&str> {
+    str::from_utf8(data).with_context(|| "invalid utf8")
+}
+
+fn parse_integer(data: &[u8]) -> Result<i64> {
+    parse_utf8(data).and_then(|s| s.parse().with_context(|| "invalid integer"))
 }

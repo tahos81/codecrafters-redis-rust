@@ -14,7 +14,7 @@ mod resp;
 #[tokio::main]
 async fn main() -> Result<()> {
     let listener = TcpListener::bind("127.0.0.1:6379").await?;
-    println!("listening on {}", listener.local_addr()?);
+    println!("listening");
     let db = Arc::new(RwLock::new(HashMap::new()));
 
     loop {
