@@ -1,6 +1,6 @@
 use std::fmt::{self, Write};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 #[derive(Debug)]
 pub enum Data<'a> {
@@ -11,7 +11,7 @@ pub enum Data<'a> {
     Array(Vec<Data<'a>>),
 }
 
-impl<'a> fmt::Display for Data<'_> {
+impl fmt::Display for Data<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Data::SimpleString(s) => write!(f, "+{s}\r\n"),
@@ -92,36 +92,61 @@ impl<'a> Data<'a> {
     }
 
     pub fn decode(data: &'a [u8]) -> Result<(Data<'a>, &'a [u8])> {
-        let (fb, data) = data.split_first().expect("empty data");
+        let (fb, data) = data.split_first().with_context(|| "RESP empty data")?;
         match fb {
             b'+' => {
-                let idx = data.iter().position(|&c| c == b'\r').expect("no crlf");
-                let s = std::str::from_utf8(&data[..idx])?;
+                let idx = data
+                    .iter()
+                    .position(|&c| c == b'\r')
+                    .with_context(|| "RESP no crlf")?;
+                let s = std::str::from_utf8(&data[..idx]).with_context(|| "RESP invalid utf8")?;
                 let remaining = &data[idx + 2..];
                 Ok((Data::SimpleString(s), remaining))
             }
             b'-' => {
-                let idx = data.iter().position(|&c| c == b'\r').expect("no crlf");
-                let s = std::str::from_utf8(&data[..idx])?;
+                let idx = data
+                    .iter()
+                    .position(|&c| c == b'\r')
+                    .with_context(|| "RESP no crlf")?;
+                let s = std::str::from_utf8(&data[..idx]).with_context(|| "RESP invalid utf8")?;
                 let remaining = &data[idx + 2..];
                 Ok((Data::SimpleError(s), remaining))
             }
             b':' => {
-                let idx = data.iter().position(|&c| c == b'\r').expect("no crlf");
-                let s = std::str::from_utf8(&data[..idx])?.parse()?;
+                let idx = data
+                    .iter()
+                    .position(|&c| c == b'\r')
+                    .with_context(|| "RESP no crlf")?;
+                let s = std::str::from_utf8(&data[..idx])
+                    .with_context(|| "RESP invalid utf8")?
+                    .parse()
+                    .with_context(|| "RESP invalid integer")?;
                 let remaining = &data[idx + 2..];
                 Ok((Data::Integer(s), remaining))
             }
             b'$' => {
-                let idx = data.iter().position(|&c| c == b'\r').expect("no crlf");
-                let len: usize = std::str::from_utf8(&data[..idx])?.parse()?;
-                let s = std::str::from_utf8(&data[idx + 2..idx + 2 + len])?;
+                let idx = data
+                    .iter()
+                    .position(|&c| c == b'\r')
+                    .with_context(|| "RESP no crlf")?;
+                let len: usize = std::str::from_utf8(&data[..idx])
+                    .with_context(|| "RESP invalid utf8")?
+                    .parse()
+                    .with_context(|| "RESP invalid integer")?;
+                let s = std::str::from_utf8(&data[idx + 2..idx + 2 + len])
+                    .with_context(|| "RESP invalid utf8")?;
                 let remaining = &data[idx + 2 + len + 2..];
                 Ok((Data::BulkString(Some(s)), remaining))
             }
             b'*' => {
-                let idx = data.iter().position(|&c| c == b'\r').expect("no crlf");
-                let len: usize = std::str::from_utf8(&data[..idx])?.parse()?;
+                let idx = data
+                    .iter()
+                    .position(|&c| c == b'\r')
+                    .with_context(|| "RESP no crlf")?;
+                let len = std::str::from_utf8(&data[..idx])
+                    .with_context(|| "RESP invalid utf8")?
+                    .parse()
+                    .with_context(|| "RESP invalid integer")?;
 
                 let mut arr = Vec::with_capacity(len);
 
@@ -134,9 +159,7 @@ impl<'a> Data<'a> {
                 let arr = Data::Array(arr);
                 Ok((arr, remaining))
             }
-            _ => {
-                unimplemented!();
-            }
+            _ => Err(anyhow::anyhow!("UNIMPLEMENTED unknown data type")),
         }
     }
 }

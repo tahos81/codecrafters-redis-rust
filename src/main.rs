@@ -14,13 +14,19 @@ mod resp;
 #[tokio::main]
 async fn main() -> Result<()> {
     let listener = TcpListener::bind("127.0.0.1:6379").await?;
+    println!("listening on {}", listener.local_addr()?);
     let db = Arc::new(RwLock::new(HashMap::new()));
 
     loop {
         let (socket, _) = listener.accept().await?;
         println!("accepted new connection");
         let db = db.clone();
-        tokio::spawn(async move { handle_client(socket, db).await });
+        tokio::spawn(async move {
+            let res = handle_client(socket, db).await;
+            if let Err(e) = res {
+                eprintln!("error: {e:?}");
+            }
+        });
     }
 }
 
@@ -39,9 +45,27 @@ async fn handle_client(
         if bytes_read == 0 {
             break;
         }
-        let (data, _) = Data::decode(&buf)?;
-        let cmd = Command::try_from(data)?;
-        command::run(cmd, db.clone(), socket.clone()).await?;
+        let data = Data::decode(&buf);
+        let data = match data {
+            Ok((data, _)) => data,
+            Err(e) => {
+                return write_error(socket.clone(), &e.to_string()).await;
+            }
+        };
+
+        let cmd = Command::try_from(data);
+        match cmd {
+            Ok(cmd) => command::run(cmd, db.clone(), socket.clone()).await?,
+            Err(e) => {
+                write_error(socket.clone(), &e.to_string()).await?;
+            }
+        }
     }
     Ok(())
+}
+
+async fn write_error(socket: Arc<RwLock<tokio::net::TcpStream>>, msg: &str) -> Result<()> {
+    let output = Data::SimpleError(msg);
+    let mut socket_write = socket.write().await;
+    output.write_to(&mut *socket_write).await
 }

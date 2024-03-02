@@ -1,5 +1,5 @@
 use crate::resp::Data;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::{collections::HashMap, sync::Arc};
 use tokio::{
     net::TcpStream,
@@ -7,6 +7,7 @@ use tokio::{
     time::{sleep, Duration},
 };
 
+#[derive(Debug)]
 pub enum Command<'a> {
     Ping {
         message: Option<&'a str>,
@@ -34,8 +35,8 @@ impl<'a> TryFrom<Data<'a>> for Command<'a> {
                 let cmd = &arr[0];
 
                 let cmd = match cmd {
-                    Data::BulkString(cmd) => cmd.expect("nil cmd"),
-                    _ => return Err(anyhow!("invalid command")),
+                    Data::BulkString(cmd) => cmd.with_context(|| "WRONGTYPE command is nil")?,
+                    _ => bail!("RESP invalid command"),
                 };
 
                 match cmd {
@@ -45,27 +46,27 @@ impl<'a> TryFrom<Data<'a>> for Command<'a> {
                             if let Data::BulkString(message) = arr[1] {
                                 Ok(Command::Ping { message })
                             } else {
-                                unreachable!()
+                                Err(anyhow!("RESP invalid command"))
                             }
                         }
-                        _ => Err(anyhow!("invalid arg count for ping")),
+                        _ => Err(anyhow!("ERR wrong number of arguments for 'ping' command")),
                     },
                     "ECHO" | "echo" => {
                         if arr.len() != 2 {
-                            return Err(anyhow!("invalid arg count for echo"));
+                            bail!("ERR wrong number of arguments for 'echo' command");
                         }
 
                         if let Data::BulkString(message) = arr[1] {
                             Ok(Command::Echo {
-                                message: message.expect("nil message"),
+                                message: message.with_context(|| "WRONGTYPE message is nil")?,
                             })
                         } else {
-                            unreachable!()
+                            Err(anyhow!("RESP invalid command"))
                         }
                     }
                     "SET" | "set" => {
                         if arr.len() < 3 {
-                            return Err(anyhow!("invalid arg count for set"));
+                            bail!("ERR wrong number of arguments for 'set' command");
                         };
 
                         let key = &arr[1];
@@ -73,42 +74,53 @@ impl<'a> TryFrom<Data<'a>> for Command<'a> {
                         let option = arr.get(3);
                         let ttl = match option {
                             Some(Data::BulkString(Some("px"))) => {
-                                if let Data::BulkString(ttl) = arr.get(4).expect("no ttl") {
-                                    Some(ttl.expect("nil ttl").parse::<u64>()?)
+                                if let Data::BulkString(ttl) =
+                                    arr.get(4).with_context(|| "ERR syntax error")?
+                                {
+                                    Some(
+                                        ttl.with_context(|| "WRONGTYPE ttl is nil")?
+                                            .parse::<u64>()
+                                            .map_err(|_| {
+                                                anyhow!("WRONGTYPE ttl is not an integer")
+                                            })?,
+                                    )
                                 } else {
-                                    return Err(anyhow!("invalid ttl"));
+                                    bail!("RESP invalid command");
                                 }
                             }
                             None => None,
-                            _ => return Err(anyhow!("invalid option")),
+                            Some(Data::BulkString(_)) => {
+                                bail!("UNIMPLEMENTED unknown option for set")
+                            }
+                            _ => bail!("RESP invalid command"),
                         };
 
                         match (key, value) {
                             (Data::BulkString(key), Data::BulkString(value)) => Ok(Command::Set {
-                                key: key.expect("nil key"),
-                                value: value.expect("nil value"),
+                                key: key.with_context(|| "WRONGTYPE key is nil")?,
+                                value: value.with_context(|| "WRONGTYPE value is nil")?,
                                 ttl,
                             }),
-                            _ => Err(anyhow!("invalid command")),
+                            _ => Err(anyhow!("RESP invalid command")),
                         }
                     }
                     "GET" | "get" => {
                         if arr.len() != 2 {
-                            return Err(anyhow!("invalid arg count for get"));
+                            bail!("ERR wrong number of arguments for 'get' command");
                         }
 
                         if let Data::BulkString(key) = arr[1] {
                             Ok(Command::Get {
-                                key: key.expect("nil key"),
+                                key: key.with_context(|| "WRONGTYPE key is nil")?,
                             })
                         } else {
-                            unreachable!()
+                            Err(anyhow!("RESP invalid command"))
                         }
                     }
-                    _ => unimplemented!(),
+                    _ => Err(anyhow!("UNIMPLEMENTED unknown command")),
                 }
             }
-            _ => Err(anyhow!("Command type must be array")),
+            _ => Err(anyhow!("RESP invalid command")),
         }
     }
 }
@@ -147,15 +159,10 @@ pub async fn run<'a>(
         }
         Command::Get { key } => {
             let db_read = db.read().await;
-            let output;
-            match db_read.get(key) {
-                Some(val) => {
-                    output = Data::BulkString(Some(val.as_str()));
-                }
-                None => {
-                    output = Data::BulkString(None);
-                }
-            }
+            let output = match db_read.get(key) {
+                Some(val) => Data::BulkString(Some(val.as_str())),
+                None => Data::BulkString(None),
+            };
             let mut socket_write = socket.write().await;
             output.write_to(&mut *socket_write).await
         }
