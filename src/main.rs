@@ -5,7 +5,7 @@
 use crate::command::Command;
 use anyhow::Result;
 use resp::Data;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, env, sync::Arc};
 use tokio::{io::AsyncReadExt, net::TcpListener, sync::RwLock};
 
 mod command;
@@ -13,8 +13,9 @@ mod resp;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:6379").await?;
-    println!("listening");
+    let port = env::args().nth(2).unwrap_or("6379".to_string());
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
+    println!("listening on port {}", port);
     let db = Arc::new(RwLock::new(HashMap::new()));
 
     loop {
@@ -42,9 +43,11 @@ async fn handle_client(
             let mut socket_write = socket.write().await;
             bytes_read = socket_write.read(&mut buf).await?;
         }
+
         if bytes_read == 0 {
             break;
         }
+
         let data = Data::decode(&buf);
         let data = match data {
             Ok((data, _)) => data,
