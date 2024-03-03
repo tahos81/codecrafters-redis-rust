@@ -3,7 +3,7 @@ use std::{
     str,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 
 #[derive(Debug)]
 pub enum Data<'a> {
@@ -118,8 +118,9 @@ impl<'a> Data<'a> {
                 let (s, remaining) = if len == -1 {
                     (None, remaining)
                 } else {
-                    let (data, remaining) = parse_line(remaining)?;
-                    let s = parse_utf8(data)?;
+                    let (s, remaining) = remaining.split_at(len as usize);
+                    let s = parse_utf8(s)?;
+                    let remaining = skip_crlf(remaining)?;
                     (Some(s), remaining)
                 };
                 Ok((Data::BulkString(s), remaining))
@@ -153,14 +154,24 @@ fn parse_line(data: &[u8]) -> Result<(&[u8], &[u8])> {
     let idx = data
         .windows(2)
         .position(|window| window == b"\r\n")
-        .with_context(|| "no crlf")?;
-    Ok((&data[..idx], &data[idx + 2..]))
+        .with_context(|| "RESP no crlf")?;
+    let (data, remaining) = data.split_at(idx);
+    let remaining = skip_crlf(remaining)?;
+    Ok((data, remaining))
 }
 
 fn parse_utf8(data: &[u8]) -> Result<&str> {
-    str::from_utf8(data).with_context(|| "invalid utf8")
+    str::from_utf8(data).with_context(|| "RESP invalid utf8")
 }
 
 fn parse_integer(data: &[u8]) -> Result<i64> {
-    parse_utf8(data).and_then(|s| s.parse().with_context(|| "invalid integer"))
+    parse_utf8(data).and_then(|s| s.parse().with_context(|| "RESP invalid integer"))
+}
+
+fn skip_crlf(data: &[u8]) -> Result<&[u8]> {
+    if data.len() < 2 || &data[..2] != b"\r\n" {
+        bail!("RESP no crlf");
+    }
+
+    Ok(&data[2..])
 }

@@ -7,7 +7,7 @@ use tokio::{
     time::{sleep, Duration},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Command<'a> {
     Ping {
         message: Option<&'a str>,
@@ -22,6 +22,9 @@ pub enum Command<'a> {
     },
     Get {
         key: &'a str,
+    },
+    Info {
+        sections: [Option<&'a str>; 3],
     },
 }
 
@@ -117,6 +120,22 @@ impl<'a> TryFrom<Data<'a>> for Command<'a> {
                             Err(anyhow!("RESP invalid command"))
                         }
                     }
+                    "INFO" | "info" => {
+                        if arr.len() > 4 {
+                            bail!("ERR 'info' supports upto 3 sections only");
+                        }
+
+                        let mut sections = [None; 3];
+                        for (i, section) in arr.iter().enumerate().skip(1) {
+                            if let Data::BulkString(section) = section {
+                                sections[i - 1] = *section;
+                            } else {
+                                bail!("RESP invalid command");
+                            }
+                        }
+
+                        Ok(Command::Info { sections })
+                    }
                     _ => Err(anyhow!("UNIMPLEMENTED unknown command")),
                 }
             }
@@ -163,6 +182,14 @@ pub async fn run<'a>(
                 Some(val) => Data::BulkString(Some(val.as_str())),
                 None => Data::BulkString(None),
             };
+            let mut socket_write = socket.write().await;
+            output.write_to(&mut *socket_write).await
+        }
+        Command::Info { .. } => {
+            let mut info = String::new();
+            info.push_str("# Replication\r\n");
+            info.push_str("role:master\r\n");
+            let output = Data::BulkString(Some(info.as_str()));
             let mut socket_write = socket.write().await;
             output.write_to(&mut *socket_write).await
         }
