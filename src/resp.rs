@@ -4,6 +4,8 @@ use std::{
     str,
 };
 
+use crate::command::Command;
+
 #[derive(Debug)]
 pub enum Data<'a> {
     SimpleString(&'a str),
@@ -32,6 +34,21 @@ impl fmt::Display for Data<'_> {
                 }
                 Ok(())
             }
+        }
+    }
+}
+
+impl<'a> From<Command<'a>> for Data<'a> {
+    fn from(cmd: Command<'a>) -> Self {
+        match cmd {
+            Command::Ping { message } => {
+                if let Some(message) = message {
+                    Data::Array(vec![Data::BulkString(Some(message))])
+                } else {
+                    Data::Array(vec![Data::BulkString(Some("PING"))])
+                }
+            }
+            _ => unimplemented!(),
         }
     }
 }

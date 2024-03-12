@@ -31,6 +31,7 @@ pub async fn handle(
                 return write_error(socket.clone(), &e.to_string()).await;
             }
         };
+        println!("received: {:?}", data);
 
         let cmd = Command::try_from(data);
         match cmd {

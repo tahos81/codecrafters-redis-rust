@@ -3,8 +3,13 @@
 #![warn(clippy::pedantic)]
 
 use anyhow::Result;
+use config::Role;
+use resp::Data;
 use std::{collections::HashMap, sync::Arc};
-use tokio::{net::TcpListener, sync::RwLock};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    sync::RwLock,
+};
 
 use crate::config::Config;
 
@@ -18,6 +23,9 @@ async fn main() -> Result<()> {
     let config = Arc::new(Config::parse()?);
     let port = config.port();
     let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
+    if let Role::Slave { master } = config.role() {
+        connect_to_master(master).await?;
+    }
     println!("listening on port {}", port);
     let db = Arc::new(RwLock::new(HashMap::new()));
 
@@ -33,4 +41,13 @@ async fn main() -> Result<()> {
             }
         });
     }
+}
+
+async fn connect_to_master(master_addr: &str) -> Result<TcpStream> {
+    let mut stream = TcpStream::connect(master_addr).await?;
+    let cmd = command::Command::Ping { message: None };
+    let data = Into::<Data<'_>>::into(cmd);
+    data.write_to(&mut stream).await?;
+
+    Ok(stream)
 }
