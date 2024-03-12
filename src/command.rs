@@ -193,11 +193,17 @@ pub async fn run<'a>(
             let mut info = String::new();
             info.push_str("# Replication\r\n");
             match config.role() {
-                Role::Slave(_) => {
+                Role::Slave { .. } => {
                     info.push_str("role:slave\r\n");
                 }
-                Role::Master => {
+                Role::Master { id, offset } => {
                     info.push_str("role:master\r\n");
+                    info.push_str("master_replid:");
+                    info.push_str(id.as_str());
+                    info.push_str("\r\n");
+                    info.push_str("master_repl_offset:");
+                    info.push_str(offset.to_string().as_str());
+                    info.push_str("\r\n");
                 }
             }
             let output = Data::BulkString(Some(info.as_str()));

@@ -5,3 +5,4 @@ Make sure our code follows these best practices, UNLESS there's a comment explai
 3. Don't store secrets in code.
 4. Follow reasonable conventions of the language we're programming in. No need to be too strict.
 5. Avoid dangerous stuff, like things that could lead to template injection, SQL injection, broken access control, or really anything that would show up as a CVE somewhere.
+6. Code must be idiomatic and easy to read rust.

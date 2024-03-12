@@ -7,8 +7,8 @@ pub struct Config {
 }
 
 pub enum Role {
-    Master,
-    Slave(String),
+    Master { id: String, offset: u64 },
+    Slave { master: String },
 }
 
 impl Config {
@@ -35,9 +35,12 @@ impl Config {
 
         let port = port.unwrap_or("6379".to_string());
         let role = if let Some(master) = replica_of {
-            Role::Slave(master)
+            Role::Slave { master }
         } else {
-            Role::Master
+            Role::Master {
+                id: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb".to_string(),
+                offset: 0,
+            }
         };
 
         Ok(Config { port, role })
