@@ -1,9 +1,8 @@
+use anyhow::{bail, Context, Result};
 use std::{
     fmt::{self, Write},
     str,
 };
-
-use anyhow::{bail, Context, Result};
 
 #[derive(Debug)]
 pub enum Data<'a> {

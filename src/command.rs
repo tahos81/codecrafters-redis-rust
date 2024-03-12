@@ -1,10 +1,14 @@
-use crate::resp::Data;
 use anyhow::{anyhow, bail, Context, Result};
 use std::{collections::HashMap, sync::Arc};
 use tokio::{
     net::TcpStream,
     sync::RwLock,
     time::{sleep, Duration},
+};
+
+use crate::{
+    config::{Config, Role},
+    resp::Data,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -34,7 +38,6 @@ impl<'a> TryFrom<Data<'a>> for Command<'a> {
     fn try_from(value: Data<'a>) -> Result<Self> {
         match value {
             Data::Array(arr) => {
-                //this is equivalent to copy
                 let cmd = &arr[0];
 
                 let cmd = match cmd {
@@ -122,7 +125,7 @@ impl<'a> TryFrom<Data<'a>> for Command<'a> {
                     }
                     "INFO" | "info" => {
                         if arr.len() > 4 {
-                            bail!("ERR 'info' supports upto 3 sections only");
+                            bail!("ERR 'info' supports up to 3 sections");
                         }
 
                         let mut sections = [None; 3];
@@ -148,6 +151,7 @@ pub async fn run<'a>(
     cmd: Command<'_>,
     db: Arc<RwLock<HashMap<String, String>>>,
     socket: Arc<RwLock<TcpStream>>,
+    config: Arc<Config>,
 ) -> Result<()> {
     match cmd {
         Command::Ping { message } => {
@@ -188,7 +192,14 @@ pub async fn run<'a>(
         Command::Info { .. } => {
             let mut info = String::new();
             info.push_str("# Replication\r\n");
-            info.push_str("role:master\r\n");
+            match config.role() {
+                Role::Slave(_) => {
+                    info.push_str("role:slave\r\n");
+                }
+                Role::Master => {
+                    info.push_str("role:master\r\n");
+                }
+            }
             let output = Data::BulkString(Some(info.as_str()));
             let mut socket_write = socket.write().await;
             output.write_to(&mut *socket_write).await
